@@ -1,0 +1,32 @@
+import { useEffect, useState } from 'react';
+import type { FormEvent, ReactNode } from 'react';
+import { X } from 'lucide-react';
+import { apiFetch, jsonBody } from '../lib/api';
+import { clientFormFrom, clientPayload, emptyClientForm } from '../lib/clientProfile';
+import type { ClientForm, ClientProfile } from '../lib/clientProfile';
+
+type Props = { open: boolean; client?: ClientProfile | null; onClose: () => void; onSaved: (client: ClientProfile) => void };
+
+function Field({ label, children, required = false }: { label: string; children: ReactNode; required?: boolean }) {
+  return <label className="client-field"><span>{label}{required ? ' *' : ''}</span>{children}</label>;
+}
+
+export default function ClientFormModal({ open, client, onClose, onSaved }: Props) {
+  const [form, setForm] = useState<ClientForm>(emptyClientForm);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  useEffect(() => { if (open) { setForm(client ? clientFormFrom(client) : emptyClientForm); setError(''); } }, [client, open]);
+  if (!open) return null;
+  const setValue = (key: keyof ClientForm, value: string) => setForm((current) => ({ ...current, [key]: value }));
+  async function submit(event: FormEvent) {
+    event.preventDefault(); setSaving(true); setError('');
+    try {
+      const saved = client
+        ? await apiFetch<ClientProfile>(`/api/clients/${client.id}`, { ...jsonBody(clientPayload(form)), method: 'PATCH' })
+        : await apiFetch<ClientProfile>('/api/clients', jsonBody(clientPayload(form)));
+      onSaved(saved); onClose();
+    } catch (reason) { setError(reason instanceof Error ? reason.message : 'Unable to save client'); }
+    finally { setSaving(false); }
+  }
+  return <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}><form className="modal client-modal" onSubmit={submit}><div className="modal-heading"><div><p className="eyebrow">CLIENT PROFILE</p><h2>{client ? 'Edit client' : 'Add a new client'}</h2><p className="muted">Capture the details your legal practice needs.</p></div><button type="button" className="icon-button" onClick={onClose}><X size={18} /></button></div><div className="client-form-section"><h3>Basic details</h3><div className="client-form-grid"><Field label="Full name" required><input required value={form.full_name} onChange={(e) => setValue('full_name', e.target.value)} placeholder="Client full name" /></Field><Field label="Email"><input type="email" value={form.email || ''} onChange={(e) => setValue('email', e.target.value)} placeholder="client@example.com" /></Field><Field label="Phone"><input value={form.phone || ''} onChange={(e) => setValue('phone', e.target.value)} placeholder="Primary phone" /></Field><Field label="Alternate phone"><input value={form.alternate_phone || ''} onChange={(e) => setValue('alternate_phone', e.target.value)} placeholder="Optional" /></Field><Field label="Client type"><select value={form.client_type} onChange={(e) => setValue('client_type', e.target.value)}><option value="individual">Individual</option><option value="company">Company / organization</option></select></Field><Field label="Organization name"><input value={form.organization_name || ''} onChange={(e) => setValue('organization_name', e.target.value)} placeholder="If applicable" /></Field></div></div><div className="client-form-section"><h3>Contact and location</h3><div className="client-form-grid"><Field label="Address"><input value={form.address || ''} onChange={(e) => setValue('address', e.target.value)} placeholder="Street address" /></Field><Field label="City"><input value={form.city || ''} onChange={(e) => setValue('city', e.target.value)} placeholder="City" /></Field><Field label="State"><input value={form.state || ''} onChange={(e) => setValue('state', e.target.value)} placeholder="State" /></Field><Field label="Postal code"><input value={form.postal_code || ''} onChange={(e) => setValue('postal_code', e.target.value)} placeholder="Postal code" /></Field><Field label="Preferred contact"><select value={form.preferred_contact_method} onChange={(e) => setValue('preferred_contact_method', e.target.value)}><option value="email">Email</option><option value="phone">Phone</option><option value="whatsapp">WhatsApp</option><option value="none">Do not contact</option></select></Field><Field label="Country"><input value={form.country || ''} onChange={(e) => setValue('country', e.target.value)} placeholder="IN" /></Field></div></div><div className="client-form-section"><h3>Professional and identification</h3><p className="form-hint">Optional fields. Only collect identification information when it is needed for the matter.</p><div className="client-form-grid"><Field label="Date of birth"><input type="date" value={form.date_of_birth || ''} onChange={(e) => setValue('date_of_birth', e.target.value)} /></Field><Field label="Occupation"><input value={form.occupation || ''} onChange={(e) => setValue('occupation', e.target.value)} placeholder="Occupation" /></Field><Field label="ID type"><select value={form.id_type || ''} onChange={(e) => setValue('id_type', e.target.value)}><option value="">Not provided</option><option value="aadhaar">Aadhaar</option><option value="passport">Passport</option><option value="pan">PAN</option><option value="driving_license">Driving licence</option><option value="other">Other</option></select></Field><Field label="ID number"><input value={form.id_number || ''} onChange={(e) => setValue('id_number', e.target.value)} placeholder="Optional" /></Field><Field label="Referred by"><input value={form.referred_by || ''} onChange={(e) => setValue('referred_by', e.target.value)} placeholder="Referral source" /></Field><Field label="Risk level"><select value={form.risk_level} onChange={(e) => setValue('risk_level', e.target.value)}><option value="normal">Normal</option><option value="low">Low</option><option value="high">High</option></select></Field></div><Field label="Notes"><textarea value={form.notes || ''} onChange={(e) => setValue('notes', e.target.value)} placeholder="Internal notes" rows={3} /></Field></div>{error && <div className="error-box">{error}</div>}<div className="modal-actions"><button type="button" className="secondary-button" onClick={onClose}>Cancel</button><button className="primary-button" type="submit" disabled={saving}>{saving ? 'Saving...' : client ? 'Save changes' : 'Create client'}</button></div></form></div>;
+}
